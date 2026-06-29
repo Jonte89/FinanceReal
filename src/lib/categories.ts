@@ -11,6 +11,8 @@ export const CATEGORIES = [
   "Shopping",
   "Alcohol",
   "Swish payment",
+  "Vacation",
+  "To Savings",
   "Other",
 ];
 
@@ -29,6 +31,8 @@ const CATEGORY_COLORS: Record<string, string> = {
   Shopping: "bg-yellow-500",
   Alcohol: "bg-purple-600",
   "Swish payment": "bg-black",
+  Vacation: "bg-sky-500",
+  "To Savings": "bg-green-600",
   Other: "bg-slate-400",
 };
 
@@ -51,6 +55,8 @@ const CATEGORY_HEX: Record<string, string> = {
   Shopping: "#eab308",
   Alcohol: "#9333ea",
   "Swish payment": "#000000",
+  Vacation: "#0ea5e9",
+  "To Savings": "#16a34a",
   Other: "#94a3b8",
 };
 

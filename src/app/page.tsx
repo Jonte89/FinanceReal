@@ -62,14 +62,16 @@ interface Slice {
 }
 
 function ExpensesPie({ slices, total }: { slices: Slice[]; total: number }) {
-  const size = 200;
-  const r = 90;
+  const size = 320;
+  const r = 148;
   const cx = size / 2;
   const cy = size / 2;
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
 
   if (total <= 0) {
     return (
-      <div className="flex h-[200px] w-[200px] items-center justify-center rounded-full bg-slate-50 text-center text-xs text-slate-400">
+      <div className="flex h-[320px] w-[320px] items-center justify-center rounded-full bg-slate-50 text-center text-xs text-slate-400">
         No expenses
         <br />
         this month
@@ -77,33 +79,85 @@ function ExpensesPie({ slices, total }: { slices: Slice[]; total: number }) {
     );
   }
 
-  // A single category fills the whole circle — an arc from 0–360 is degenerate.
-  if (slices.length === 1) {
-    return (
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <circle cx={cx} cy={cy} r={r} fill={categoryHex(slices[0].category)} />
-      </svg>
-    );
+  // Geometry for each slice. A single category is rendered as a full circle
+  // since an arc from 0–360° is degenerate.
+  let cumulative = 0;
+  const arcs = slices.map((s) => {
+    const start = (cumulative / total) * 360;
+    cumulative += s.value;
+    const end = (cumulative / total) * 360;
+    return { ...s, start, end, mid: (start + end) / 2 };
+  });
+
+  function sliceStyle(category: string, mid: number): React.CSSProperties {
+    const isHover = hovered === category;
+    const dim = hovered !== null && !isHover;
+    // Nudge the hovered slice outward along its mid-angle for a "pop" effect.
+    const offset = isHover ? polar(0, 0, 7, mid) : { x: 0, y: 0 };
+    return {
+      transform: `translate(${offset.x}px, ${offset.y}px)`,
+      transition: "transform 160ms ease, opacity 160ms ease, filter 160ms ease",
+      opacity: dim ? 0.45 : 1,
+      filter: isHover
+        ? "brightness(1.18) drop-shadow(0 2px 5px rgba(0,0,0,0.28))"
+        : "none",
+      cursor: "pointer",
+    };
   }
 
-  let cumulative = 0;
+  function onMove(e: React.MouseEvent) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTip({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }
+
+  const hoveredArc = arcs.find((a) => a.category === hovered);
+
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {slices.map((s) => {
-        const start = (cumulative / total) * 360;
-        cumulative += s.value;
-        const end = (cumulative / total) * 360;
-        return (
-          <path
-            key={s.category}
-            d={arcPath(cx, cy, r, start, end)}
-            fill={categoryHex(s.category)}
-            stroke="#fff"
-            strokeWidth={2}
+    <div
+      className="relative"
+      style={{ width: size, height: size }}
+      onMouseMove={onMove}
+      onMouseLeave={() => {
+        setHovered(null);
+        setTip(null);
+      }}
+    >
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        {arcs.length === 1 ? (
+          <circle
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill={categoryHex(arcs[0].category)}
+            style={sliceStyle(arcs[0].category, arcs[0].mid)}
+            onMouseEnter={() => setHovered(arcs[0].category)}
           />
-        );
-      })}
-    </svg>
+        ) : (
+          arcs.map((a) => (
+            <path
+              key={a.category}
+              d={arcPath(cx, cy, r, a.start, a.end)}
+              fill={categoryHex(a.category)}
+              stroke="#fff"
+              strokeWidth={2}
+              style={sliceStyle(a.category, a.mid)}
+              onMouseEnter={() => setHovered(a.category)}
+            />
+          ))
+        )}
+      </svg>
+      {hoveredArc && tip && (
+        <div
+          className="pointer-events-none absolute z-10 whitespace-nowrap rounded-md bg-slate-800 px-2.5 py-1.5 text-xs text-white shadow-lg"
+          style={{ left: tip.x + 12, top: tip.y + 12 }}
+        >
+          <span className="font-semibold">{hoveredArc.category}</span>
+          <span className="ml-1.5 text-slate-300">
+            {formatSEK(hoveredArc.value)} · {Math.round((hoveredArc.value / total) * 100)}%
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -229,9 +283,9 @@ export default function DashboardPage() {
             ))}
           </select>
         </div>
-        <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-center">
+        <div className="flex flex-col items-center justify-center gap-10 sm:flex-row sm:items-center lg:gap-16">
           <ExpensesPie slices={pieSlices} total={pieTotal} />
-          <div className="flex-1 space-y-2">
+          <div className="w-full space-y-2 sm:w-80">
             {pieTotal <= 0 ? (
               <p className="text-sm text-slate-400">No expenses recorded for this month.</p>
             ) : (
