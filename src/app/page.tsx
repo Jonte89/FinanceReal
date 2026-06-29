@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { formatSEK } from "@/lib/currency";
-import { categoryColor } from "@/lib/categories";
+import { categoryColor, categoryHex } from "@/lib/categories";
 
 interface Transaction {
   id: string;
@@ -34,6 +34,79 @@ function AccentCard({ label, value, subtitle, accent, valueClass }: AccentCardPr
   );
 }
 
+// "2026-06" key used to group/select a month.
+function monthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthKeyLabel(key: string): string {
+  const [y, m] = key.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+}
+
+function polar(cx: number, cy: number, r: number, angleDeg: number) {
+  const a = ((angleDeg - 90) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+}
+
+function arcPath(cx: number, cy: number, r: number, start: number, end: number): string {
+  const s = polar(cx, cy, r, end);
+  const e = polar(cx, cy, r, start);
+  const largeArc = end - start <= 180 ? 0 : 1;
+  return `M ${cx} ${cy} L ${s.x} ${s.y} A ${r} ${r} 0 ${largeArc} 0 ${e.x} ${e.y} Z`;
+}
+
+interface Slice {
+  category: string;
+  value: number;
+}
+
+function ExpensesPie({ slices, total }: { slices: Slice[]; total: number }) {
+  const size = 200;
+  const r = 90;
+  const cx = size / 2;
+  const cy = size / 2;
+
+  if (total <= 0) {
+    return (
+      <div className="flex h-[200px] w-[200px] items-center justify-center rounded-full bg-slate-50 text-center text-xs text-slate-400">
+        No expenses
+        <br />
+        this month
+      </div>
+    );
+  }
+
+  // A single category fills the whole circle — an arc from 0–360 is degenerate.
+  if (slices.length === 1) {
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cy} r={r} fill={categoryHex(slices[0].category)} />
+      </svg>
+    );
+  }
+
+  let cumulative = 0;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {slices.map((s) => {
+        const start = (cumulative / total) * 360;
+        cumulative += s.value;
+        const end = (cumulative / total) * 360;
+        return (
+          <path
+            key={s.category}
+            d={arcPath(cx, cy, r, start, end)}
+            fill={categoryHex(s.category)}
+            stroke="#fff"
+            strokeWidth={2}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
 export default function DashboardPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [income, setIncome] = useState(0);
@@ -41,6 +114,7 @@ export default function DashboardPage() {
   const [stockTotal, setStockTotal] = useState(0);
   const [savingsTotal, setSavingsTotal] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(() => monthKey(new Date()));
 
   useEffect(() => {
     fetch("/api/transactions")
@@ -76,6 +150,28 @@ export default function DashboardPage() {
       .catch(() => {});
   }, []);
 
+  // Months that have any transactions, newest first, with the current month
+  // always present so the picker is never empty.
+  const monthOptions = useMemo(() => {
+    const keys = new Set<string>([monthKey(new Date())]);
+    for (const t of transactions) keys.add(monthKey(new Date(t.date)));
+    return Array.from(keys).sort().reverse();
+  }, [transactions]);
+
+  // Expenses for the selected month, grouped by category and sorted desc.
+  const { pieSlices, pieTotal } = useMemo(() => {
+    const byCategory = new Map<string, number>();
+    for (const t of transactions) {
+      if (t.type !== "EXPENSE") continue;
+      if (monthKey(new Date(t.date)) !== selectedMonth) continue;
+      byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + t.amount);
+    }
+    const slices = Array.from(byCategory, ([category, value]) => ({ category, value })).sort(
+      (a, b) => b.value - a.value
+    );
+    return { pieSlices: slices, pieTotal: slices.reduce((s, x) => s + x.value, 0) };
+  }, [transactions, selectedMonth]);
+
   const totalBalance = stockTotal + savingsTotal;
   const cashflow = income - expenses;
   const monthLabel = new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" });
@@ -88,7 +184,7 @@ export default function DashboardPage() {
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <AccentCard
-          label="Total Balance"
+          label="Total Wealth"
           value={formatSEK(totalBalance)}
           subtitle="Stocks + savings"
           accent="border-emerald-500"
@@ -115,6 +211,53 @@ export default function DashboardPage() {
           accent="border-amber-500"
           valueClass={cashflow < 0 ? "text-rose-600" : "text-amber-600"}
         />
+      </div>
+
+      {/* Expenses by category */}
+      <div className="rounded-lg border border-slate-200/70 bg-white p-5 shadow-sm">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-800">Expenses by Category</h2>
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          >
+            {monthOptions.map((key) => (
+              <option key={key} value={key}>
+                {monthKeyLabel(key)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-center">
+          <ExpensesPie slices={pieSlices} total={pieTotal} />
+          <div className="flex-1 space-y-2">
+            {pieTotal <= 0 ? (
+              <p className="text-sm text-slate-400">No expenses recorded for this month.</p>
+            ) : (
+              <>
+                {pieSlices.map((s) => (
+                  <div key={s.category} className="flex items-center justify-between text-sm">
+                    <span className="inline-flex items-center gap-2 text-slate-600">
+                      <span className={`h-2.5 w-2.5 rounded-full ${categoryColor(s.category)}`} />
+                      {s.category}
+                    </span>
+                    <span className="text-slate-700">
+                      <span className="font-medium">{formatSEK(s.value)}</span>
+                      <span className="ml-2 text-xs text-slate-400">
+                        {Math.round((s.value / pieTotal) * 100)}%
+                      </span>
+                    </span>
+                  </div>
+                ))}
+                <div className="flex justify-between border-t border-slate-100 pt-2 text-sm font-semibold text-slate-800">
+                  <span>Total</span>
+                  <span>{formatSEK(pieTotal)}</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Lower panels */}

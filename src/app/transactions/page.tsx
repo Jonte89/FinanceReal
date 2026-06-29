@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { formatSEK } from "@/lib/currency";
 import { CATEGORIES, categoryColor } from "@/lib/categories";
+import { evaluateExpression } from "@/lib/expression";
 
 interface Transaction {
   id: string;
@@ -54,11 +55,13 @@ export default function TransactionsPage() {
   }, []);
 
   async function handleAdd() {
-    const value = Number(amount);
-    if (!Number.isFinite(value) || value <= 0) {
-      toast.error("Enter a valid positive amount");
+    const evaluated = evaluateExpression(amount);
+    if (evaluated === null || evaluated <= 0) {
+      toast.error("Enter a valid positive amount or expression");
       return;
     }
+    // Round to cents to avoid floating-point noise from division.
+    const value = Math.round(evaluated * 100) / 100;
     setSaving(true);
     const res = await fetch("/api/transactions", {
       method: "POST",
@@ -87,6 +90,9 @@ export default function TransactionsPage() {
       toast.error("Could not delete");
     }
   }
+
+  const rawPreview = evaluateExpression(amount);
+  const amountPreview = rawPreview === null ? null : Math.round(rawPreview * 100) / 100;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -120,9 +126,15 @@ export default function TransactionsPage() {
               <div className="grid gap-2">
                 <Label htmlFor="amount">Amount (SEK)</Label>
                 <Input
-                  id="amount" type="number" min="0" step="0.01" value={amount}
-                  onChange={(e) => setAmount(e.target.value)} placeholder="0.00"
+                  id="amount" type="text" inputMode="text" value={amount}
+                  onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 100 + 50 * 2"
                 />
+                {amountPreview !== null && (
+                  <p className="text-xs text-muted-foreground">= {formatSEK(amountPreview)}</p>
+                )}
+                {amount.trim() !== "" && amountPreview === null && (
+                  <p className="text-xs text-red-600">Invalid expression</p>
+                )}
               </div>
               <div className="grid gap-2">
                 <Label>Category</Label>
