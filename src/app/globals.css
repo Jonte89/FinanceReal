@@ -126,5 +126,8 @@
   }
   html {
     @apply font-sans;
+    /* Always reserve space for the scrollbar so the layout doesn't shift
+       horizontally when a page is long enough to scroll. */
+    scrollbar-gutter: stable;
   }
 }

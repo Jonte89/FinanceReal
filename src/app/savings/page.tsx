@@ -115,7 +115,7 @@ export default function SavingsPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-5xl">
         <p className="text-muted-foreground">Loading…</p>
       </div>
     );
@@ -164,7 +164,7 @@ export default function SavingsPage() {
   const { account, total = 0, annualRate = 0.02, history = [] } = data;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{account.name}</h1>
