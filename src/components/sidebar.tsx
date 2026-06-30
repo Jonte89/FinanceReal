@@ -58,3 +58,32 @@ export function Sidebar() {
     </aside>
   );
 }
+
+/**
+ * Bottom tab bar shown only on small screens (the sidebar above is hidden on
+ * mobile), so all pages stay reachable from a phone.
+ */
+export function MobileNav() {
+  const pathname = usePathname();
+
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-white/5 bg-[#171b27] pb-[env(safe-area-inset-bottom)] md:hidden">
+      {links.map(({ href, label, icon: Icon }) => {
+        const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+        return (
+          <Link
+            key={href}
+            href={href}
+            className={cn(
+              "flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors",
+              active ? "text-emerald-400" : "text-slate-400"
+            )}
+          >
+            <Icon className="h-5 w-5" />
+            {label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}

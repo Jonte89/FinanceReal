@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/sidebar";
+import { Sidebar, MobileNav } from "@/components/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = Geist({
@@ -32,8 +32,9 @@ export default function RootLayout({
       <body className="min-h-full bg-[#f3f4f6]">
         <div className="flex min-h-screen">
           <Sidebar />
-          <main className="flex-1 px-6 py-7 md:px-10">{children}</main>
+          <main className="flex-1 px-6 py-7 pb-24 md:px-10 md:pb-7">{children}</main>
         </div>
+        <MobileNav />
         <Toaster richColors position="top-right" />
       </body>
     </html>
