@@ -31,6 +31,26 @@ interface Transaction {
 
 const todayInput = () => new Date().toISOString().slice(0, 10);
 
+interface AccentCardProps {
+  label: string;
+  value: string;
+  subtitle: string;
+  accent: string;
+  valueClass?: string;
+}
+
+function AccentCard({ label, value, subtitle, accent, valueClass }: AccentCardProps) {
+  return (
+    <div className={`rounded-lg border-l-4 ${accent} bg-white p-4 shadow-sm`}>
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        {label}
+      </div>
+      <div className={`mt-1 text-2xl font-bold ${valueClass ?? "text-slate-800"}`}>{value}</div>
+      <div className="mt-1 text-xs text-slate-400">{subtitle}</div>
+    </div>
+  );
+}
+
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,6 +113,14 @@ export default function TransactionsPage() {
 
   const rawPreview = evaluateExpression(amount);
   const amountPreview = rawPreview === null ? null : Math.round(rawPreview * 100) / 100;
+
+  const totalIncome = transactions
+    .filter((t) => t.type === "INCOME")
+    .reduce((sum, t) => sum + t.amount, 0);
+  const totalExpense = transactions
+    .filter((t) => t.type === "EXPENSE")
+    .reduce((sum, t) => sum + t.amount, 0);
+  const netCashFlow = totalIncome - totalExpense;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -164,6 +192,30 @@ export default function TransactionsPage() {
           </DialogContent>
         </Dialog>
       </header>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <AccentCard
+          label="Income"
+          value={formatSEK(totalIncome)}
+          subtitle="All income"
+          accent="border-emerald-500"
+          valueClass="text-emerald-600"
+        />
+        <AccentCard
+          label="Expenses"
+          value={formatSEK(totalExpense)}
+          subtitle="All expenses"
+          accent="border-rose-500"
+          valueClass="text-rose-600"
+        />
+        <AccentCard
+          label="Net Cash Flow"
+          value={formatSEK(netCashFlow)}
+          subtitle="Income − expenses"
+          accent="border-amber-500"
+          valueClass={netCashFlow < 0 ? "text-rose-600" : "text-amber-600"}
+        />
+      </div>
 
       <Card>
         <CardHeader>

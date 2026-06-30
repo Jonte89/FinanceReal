@@ -36,6 +36,8 @@ Pages live in `src/app/<domain>/page.tsx`; their APIs in `src/app/api/<domain>/r
 ### Domain logic
 - **Stock pricing** (`src/app/api/stocks/route.ts`): `yahoo-finance2` v3 is **class-based** — instantiate `new YahooFinance(...)`. Non-SEK quotes are converted to SEK via a `<CCY>SEK=X` FX quote, cached per request.
 - **Savings interest** (`src/lib/savings.ts`): pure accrual engine. `accrueSavings` rolls balances forward day-by-day from `lastCalculatedDate` to today (idempotent same-day), applies the daily rate, and **capitalizes accrued interest into principal on Dec 31**. Rate tiers: `FLEX_PLUS_RATE` (2.10%) at/above `FLEX_PLUS_THRESHOLD` (10 000 SEK), else `FLEX_RATE` (2.00%). The savings GET route accrues and persists on every read.
+- **Stock news** (`src/app/api/stocks/news/route.ts`): per-ticker headlines via `yahoo-finance2`. Equities are matched by searching the company name and keeping only results whose `relatedTickers` share the same `tickerRoot` (suffix-stripped symbol); ETFs/commodities (no `relatedTickers`) are matched by deriving theme keywords from the fund name (`FUND_STOPWORDS` drops provider/structure noise) and keeping headlines that mention them.
+- **Amount expressions** (`src/lib/expression.ts`): `evaluateExpression` is a hand-written recursive-descent parser for amount inputs (`+ - * /`, parens, unary signs) — never `eval`/`Function`. Returns `null` on empty or invalid input.
 - **Formatting** (`src/lib/currency.ts`): always use `formatSEK` for money display (Swedish `sv-SE` locale, e.g. `1 234,50 kr`).
 
 ### UI

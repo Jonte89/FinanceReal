@@ -7,6 +7,7 @@ const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
 interface QuoteResult {
   regularMarketPrice?: number;
+  regularMarketChangePercent?: number;
   currency?: string;
 }
 
@@ -18,6 +19,7 @@ export interface StockRow {
   priceNative: number | null;
   priceSEK: number | null;
   valueSEK: number | null;
+  changePercent: number | null;
   error?: string;
 }
 
@@ -40,10 +42,11 @@ export async function GET() {
         const quote = (await yahooFinance.quote(h.ticker)) as QuoteResult | null;
         const priceNative = quote?.regularMarketPrice ?? null;
         const currency = quote?.currency ?? "SEK";
+        const changePercent = quote?.regularMarketChangePercent ?? null;
         if (priceNative == null) {
           return {
             id: h.id, ticker: h.ticker, shares: h.shares, currency,
-            priceNative: null, priceSEK: null, valueSEK: null,
+            priceNative: null, priceSEK: null, valueSEK: null, changePercent: null,
             error: "No price available",
           };
         }
@@ -51,12 +54,12 @@ export async function GET() {
         const priceSEK = priceNative * rate;
         return {
           id: h.id, ticker: h.ticker, shares: h.shares, currency,
-          priceNative, priceSEK, valueSEK: priceSEK * h.shares,
+          priceNative, priceSEK, valueSEK: priceSEK * h.shares, changePercent,
         };
       } catch {
         return {
           id: h.id, ticker: h.ticker, shares: h.shares, currency: "?",
-          priceNative: null, priceSEK: null, valueSEK: null,
+          priceNative: null, priceSEK: null, valueSEK: null, changePercent: null,
           error: "Failed to fetch quote",
         };
       }

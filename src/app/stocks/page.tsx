@@ -24,6 +24,7 @@ interface StockRow {
   priceNative: number | null;
   priceSEK: number | null;
   valueSEK: number | null;
+  changePercent: number | null;
   error?: string;
 }
 
@@ -191,6 +192,7 @@ export default function StocksPage() {
                 <TableHead>Ticker</TableHead>
                 <TableHead className="text-right">Shares</TableHead>
                 <TableHead className="text-right">Price</TableHead>
+                <TableHead className="text-right">Change</TableHead>
                 <TableHead className="text-right">Value (SEK)</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
@@ -198,13 +200,13 @@ export default function StocksPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                     Fetching prices…
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                     No holdings yet.
                   </TableCell>
                 </TableRow>
@@ -241,6 +243,20 @@ export default function StocksPage() {
                             "—"
                           )}
                         </TableCell>
+                        <TableCell className="text-right">
+                          {r.changePercent != null ? (
+                            <span
+                              className={
+                                r.changePercent < 0 ? "text-red-600" : "text-emerald-600"
+                              }
+                            >
+                              {r.changePercent >= 0 ? "+" : ""}
+                              {r.changePercent.toFixed(2)}%
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
                         <TableCell className="text-right font-medium">
                           {r.valueSEK != null ? formatSEK(r.valueSEK) : "—"}
                         </TableCell>
@@ -259,7 +275,7 @@ export default function StocksPage() {
                       </TableRow>
                       {isOpen && (
                         <TableRow className="hover:bg-transparent">
-                          <TableCell colSpan={6} className="bg-slate-50/60 p-4">
+                          <TableCell colSpan={7} className="bg-slate-50/60 p-4">
                             <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                               <Newspaper className="h-3.5 w-3.5" />
                               Latest news · {r.ticker}
