@@ -32,7 +32,7 @@ export default function RootLayout({
       <body className="min-h-full bg-[#f3f4f6]">
         <div className="flex min-h-screen">
           <Sidebar />
-          <main className="flex-1 px-6 py-7 pb-24 md:px-10 md:pb-7">{children}</main>
+          <main className="flex-1 px-4 py-6 pb-24 sm:px-6 md:px-10 md:py-8 md:pb-8">{children}</main>
         </div>
         <MobileNav />
         <Toaster richColors position="top-right" />

@@ -126,7 +126,7 @@ export default function SavingsPage() {
     return (
       <div className="mx-auto max-w-md space-y-6">
         <header>
-          <h1 className="text-2xl font-semibold tracking-tight">Nordiska Flex Plus</h1>
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Nordiska Flex Plus</h1>
           <p className="text-sm text-muted-foreground">Set up your savings account to start tracking.</p>
         </header>
         <Card>
@@ -165,9 +165,9 @@ export default function SavingsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{account.name}</h1>
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{account.name}</h1>
           <p className="text-sm text-muted-foreground">
             Interest updated through {new Date(account.lastCalculatedDate).toLocaleDateString("sv-SE")}.
           </p>

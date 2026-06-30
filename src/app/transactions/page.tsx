@@ -124,9 +124,9 @@ export default function TransactionsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Transactions</h1>
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Transactions</h1>
           <p className="text-sm text-muted-foreground">Income and expenses in SEK.</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>

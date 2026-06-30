@@ -126,9 +126,9 @@ export default function StocksPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Stock Portfolio</h1>
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Stock Portfolio</h1>
           <p className="text-sm text-muted-foreground">
             Live prices via Yahoo Finance, converted to SEK.
           </p>

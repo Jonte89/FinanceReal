@@ -232,8 +232,8 @@ export default function DashboardPage() {
   const maxBar = Math.max(income, expenses, 1);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <h1 className="text-xl font-semibold tracking-tight text-slate-800">Dashboard</h1>
+    <div className="mx-auto max-w-5xl space-y-6">
+      <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Dashboard</h1>
 
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -283,7 +283,7 @@ export default function DashboardPage() {
             ))}
           </select>
         </div>
-        <div className="flex flex-col items-center justify-center gap-10 sm:flex-row sm:items-center lg:gap-16">
+        <div className="flex flex-col items-center justify-center gap-8 sm:flex-row sm:items-center lg:gap-16">
           <ExpensesPie slices={pieSlices} total={pieTotal} />
           <div className="w-full space-y-2 sm:w-80">
             {pieTotal <= 0 ? (
