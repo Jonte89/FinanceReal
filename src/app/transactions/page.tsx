@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
 import { formatSEK } from "@/lib/currency";
 import { CATEGORIES, categoryColor } from "@/lib/categories";
 import { evaluateExpression } from "@/lib/expression";
+import { AccentCard } from "@/components/accent-card";
 
 interface Transaction {
   id: string;
@@ -31,26 +32,6 @@ interface Transaction {
 
 const todayInput = () => new Date().toISOString().slice(0, 10);
 
-interface AccentCardProps {
-  label: string;
-  value: string;
-  subtitle: string;
-  accent: string;
-  valueClass?: string;
-}
-
-function AccentCard({ label, value, subtitle, accent, valueClass }: AccentCardProps) {
-  return (
-    <div className={`rounded-lg border-l-4 ${accent} bg-white p-4 shadow-sm`}>
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-        {label}
-      </div>
-      <div className={`mt-1 text-2xl font-bold ${valueClass ?? "text-slate-800"}`}>{value}</div>
-      <div className="mt-1 text-xs text-slate-400">{subtitle}</div>
-    </div>
-  );
-}
-
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,11 +43,20 @@ export default function TransactionsPage() {
   const [category, setCategory] = useState("Food");
   const [date, setDate] = useState(todayInput());
   const [description, setDescription] = useState("");
+  const amountRef = useRef<HTMLInputElement>(null);
+
+  // history filters
+  const [filterType, setFilterType] = useState<"ALL" | "INCOME" | "EXPENSE">("ALL");
+  const [filterCategory, setFilterCategory] = useState("ALL");
 
   async function load() {
     setLoading(true);
-    const res = await fetch("/api/transactions");
-    setTransactions(await res.json());
+    try {
+      const res = await fetch("/api/transactions");
+      setTransactions(await res.json());
+    } catch {
+      toast.error("Could not load transactions");
+    }
     setLoading(false);
   }
 
@@ -101,18 +91,49 @@ export default function TransactionsPage() {
     load();
   }
 
-  async function handleDelete(id: string) {
-    const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" });
-    if (res.ok) {
-      setTransactions((prev) => prev.filter((t) => t.id !== id));
-      toast.success("Deleted");
-    } else {
+  async function handleDelete(tx: Transaction) {
+    const res = await fetch(`/api/transactions/${tx.id}`, { method: "DELETE" });
+    if (!res.ok) {
       toast.error("Could not delete");
+      return;
     }
+    setTransactions((prev) => prev.filter((t) => t.id !== tx.id));
+    toast.success("Transaction deleted", {
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          // Recreate the transaction (it gets a fresh id).
+          const restore = await fetch("/api/transactions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: tx.type,
+              amount: tx.amount,
+              category: tx.category,
+              date: tx.date,
+              description: tx.description ?? "",
+            }),
+          });
+          if (restore.ok) {
+            toast.success("Restored");
+            load();
+          } else {
+            toast.error("Could not restore");
+          }
+        },
+      },
+    });
   }
 
   const rawPreview = evaluateExpression(amount);
   const amountPreview = rawPreview === null ? null : Math.round(rawPreview * 100) / 100;
+
+  const visibleTransactions = transactions.filter(
+    (t) =>
+      (filterType === "ALL" || t.type === filterType) &&
+      (filterCategory === "ALL" || t.category === filterCategory)
+  );
+  const filtersActive = filterType !== "ALL" || filterCategory !== "ALL";
 
   const totalIncome = transactions
     .filter((t) => t.type === "INCOME")
@@ -135,11 +156,22 @@ export default function TransactionsPage() {
               <Plus className="mr-1 h-4 w-4" /> Add
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent
+            onOpenAutoFocus={(e) => {
+              e.preventDefault();
+              amountRef.current?.focus();
+            }}
+          >
             <DialogHeader>
               <DialogTitle>Add transaction</DialogTitle>
               <DialogDescription>Record a new income or expense.</DialogDescription>
             </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleAdd();
+              }}
+            >
             <div className="grid gap-4 py-2">
               <div className="grid gap-2">
                 <Label>Type</Label>
@@ -154,6 +186,7 @@ export default function TransactionsPage() {
               <div className="grid gap-2">
                 <Label htmlFor="amount">Amount (SEK)</Label>
                 <Input
+                  ref={amountRef}
                   id="amount" type="text" inputMode="text" value={amount}
                   onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 100 + 50 * 2"
                 />
@@ -161,7 +194,7 @@ export default function TransactionsPage() {
                   <p className="text-xs text-muted-foreground">= {formatSEK(amountPreview)}</p>
                 )}
                 {amount.trim() !== "" && amountPreview === null && (
-                  <p className="text-xs text-red-600">Invalid expression</p>
+                  <p className="text-xs text-rose-600">Invalid expression</p>
                 )}
               </div>
               <div className="grid gap-2">
@@ -185,10 +218,11 @@ export default function TransactionsPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={handleAdd} disabled={saving}>
+              <Button type="submit" disabled={saving}>
                 {saving ? "Saving…" : "Save"}
               </Button>
             </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       </header>
@@ -218,8 +252,43 @@ export default function TransactionsPage() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-base">History</CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={filterType}
+              onValueChange={(v) => setFilterType(v as "ALL" | "INCOME" | "EXPENSE")}
+            >
+              <SelectTrigger className="h-8 w-[130px] text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All types</SelectItem>
+                <SelectItem value="INCOME">Income</SelectItem>
+                <SelectItem value="EXPENSE">Expenses</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="h-8 w-[160px] text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All categories</SelectItem>
+                {CATEGORIES.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {filtersActive && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-muted-foreground"
+                onClick={() => {
+                  setFilterType("ALL");
+                  setFilterCategory("ALL");
+                }}
+              >
+                Clear
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -239,14 +308,14 @@ export default function TransactionsPage() {
                     Loading…
                   </TableCell>
                 </TableRow>
-              ) : transactions.length === 0 ? (
+              ) : visibleTransactions.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                    No transactions yet.
+                    {filtersActive ? "No transactions match the filters." : "No transactions yet."}
                   </TableCell>
                 </TableRow>
               ) : (
-                transactions.map((t) => (
+                visibleTransactions.map((t) => (
                   <TableRow key={t.id}>
                     <TableCell className="whitespace-nowrap">
                       {new Date(t.date).toLocaleDateString("sv-SE")}
@@ -262,14 +331,14 @@ export default function TransactionsPage() {
                       className={
                         t.type === "INCOME"
                           ? "text-right font-medium text-emerald-600"
-                          : "text-right font-medium text-red-600"
+                          : "text-right font-medium text-rose-600"
                       }
                     >
                       {t.type === "INCOME" ? "+" : "−"}
                       {formatSEK(t.amount)}
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(t.id)}>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(t)}>
                         <Trash2 className="h-4 w-4 text-muted-foreground" />
                       </Button>
                     </TableCell>

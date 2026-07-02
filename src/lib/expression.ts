@@ -104,11 +104,13 @@ function parse(tokens: Token[]): number | null {
 
 /**
  * Evaluate an arithmetic expression like "100+50", "200-30*2" or "(10+5)/3".
- * Returns the numeric result, or null if the input is empty or invalid.
+ * Commas are accepted as decimal separators ("100,50"), matching the app's
+ * Swedish locale. Returns the numeric result, or null if the input is empty
+ * or invalid.
  */
 export function evaluateExpression(input: string): number | null {
   if (!input.trim()) return null;
-  const tokens = tokenize(input);
+  const tokens = tokenize(input.replace(/,/g, "."));
   if (!tokens || tokens.length === 0) return null;
   return parse(tokens);
 }

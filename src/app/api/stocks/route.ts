@@ -23,18 +23,25 @@ export interface StockRow {
   error?: string;
 }
 
-async function getSekRate(currency: string, cache: Map<string, number>): Promise<number> {
-  if (currency === "SEK") return 1;
-  if (cache.has(currency)) return cache.get(currency)!;
-  const fx = (await yahooFinance.quote(`${currency}SEK=X`)) as QuoteResult | null;
-  const rate = fx?.regularMarketPrice ?? 0;
-  cache.set(currency, rate);
-  return rate;
+// Returns null when no FX quote is available (so callers can surface an error
+// instead of silently valuing the holding at 0). The cache stores the promise,
+// not the value, so concurrent rows share a single FX request per currency.
+function getSekRate(currency: string, cache: Map<string, Promise<number | null>>): Promise<number | null> {
+  if (currency === "SEK") return Promise.resolve(1);
+  let cached = cache.get(currency);
+  if (!cached) {
+    cached = yahooFinance
+      .quote(`${currency}SEK=X`)
+      .then((fx) => (fx as QuoteResult | null)?.regularMarketPrice ?? null)
+      .catch(() => null);
+    cache.set(currency, cached);
+  }
+  return cached;
 }
 
 export async function GET() {
   const holdings = await prisma.stockHolding.findMany({ orderBy: { createdAt: "asc" } });
-  const fxCache = new Map<string, number>();
+  const fxCache = new Map<string, Promise<number | null>>();
 
   const rows: StockRow[] = await Promise.all(
     holdings.map(async (h): Promise<StockRow> => {
@@ -51,6 +58,13 @@ export async function GET() {
           };
         }
         const rate = await getSekRate(currency, fxCache);
+        if (rate == null || rate <= 0) {
+          return {
+            id: h.id, ticker: h.ticker, shares: h.shares, currency,
+            priceNative, priceSEK: null, valueSEK: null, changePercent,
+            error: `No ${currency}/SEK rate`,
+          };
+        }
         const priceSEK = priceNative * rate;
         return {
           id: h.id, ticker: h.ticker, shares: h.shares, currency,

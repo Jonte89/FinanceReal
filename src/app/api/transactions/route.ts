@@ -22,10 +22,14 @@ export async function POST(request: Request) {
   if (!category || typeof category !== "string") {
     return NextResponse.json({ error: "category is required" }, { status: 400 });
   }
+  const parsedDate = date ? new Date(date) : new Date();
+  if (Number.isNaN(parsedDate.getTime())) {
+    return NextResponse.json({ error: "date is invalid" }, { status: 400 });
+  }
 
   const transaction = await prisma.transaction.create({
     data: {
-      date: date ? new Date(date) : new Date(),
+      date: parsedDate,
       type,
       amount: parsedAmount,
       category,

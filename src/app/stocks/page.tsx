@@ -114,14 +114,33 @@ export default function StocksPage() {
     load();
   }
 
-  async function handleDelete(id: string) {
-    const res = await fetch(`/api/stocks/${id}`, { method: "DELETE" });
-    if (res.ok) {
-      toast.success("Removed");
-      load();
-    } else {
+  async function handleDelete(row: StockRow) {
+    const res = await fetch(`/api/stocks/${row.id}`, { method: "DELETE" });
+    if (!res.ok) {
       toast.error("Could not remove");
+      return;
     }
+    // Drop the row locally instead of re-fetching every live quote.
+    setRows((prev) => prev.filter((r) => r.id !== row.id));
+    setTotal((prev) => prev - (row.valueSEK ?? 0));
+    toast.success(`${row.ticker} removed`, {
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          const restore = await fetch("/api/stocks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ticker: row.ticker, shares: row.shares }),
+          });
+          if (restore.ok) {
+            toast.success("Restored");
+            load();
+          } else {
+            toast.error("Could not restore");
+          }
+        },
+      },
+    });
   }
 
   return (
@@ -150,6 +169,12 @@ export default function StocksPage() {
                   Use the Yahoo Finance symbol, e.g. INVE-B.ST or AAPL.
                 </DialogDescription>
               </DialogHeader>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAdd();
+                }}
+              >
               <div className="grid gap-4 py-2">
                 <div className="grid gap-2">
                   <Label htmlFor="ticker">Ticker</Label>
@@ -161,16 +186,17 @@ export default function StocksPage() {
                 <div className="grid gap-2">
                   <Label htmlFor="shares">Shares</Label>
                   <Input
-                    id="shares" type="number" min="0" step="any" value={shares}
+                    id="shares" type="number" min="0" step="any" inputMode="decimal" value={shares}
                     onChange={(e) => setShares(e.target.value)} placeholder="10"
                   />
                 </div>
               </div>
               <DialogFooter>
-                <Button onClick={handleAdd} disabled={saving}>
+                <Button type="submit" disabled={saving}>
                   {saving ? "Saving…" : "Save"}
                 </Button>
               </DialogFooter>
+              </form>
             </DialogContent>
           </Dialog>
         </div>
@@ -236,7 +262,7 @@ export default function StocksPage() {
                         <TableCell className="text-right">{r.shares}</TableCell>
                         <TableCell className="text-right">
                           {r.error ? (
-                            <span className="text-xs text-red-600">{r.error}</span>
+                            <span className="text-xs text-rose-600">{r.error}</span>
                           ) : r.priceSEK != null ? (
                             formatSEK(r.priceSEK)
                           ) : (
@@ -247,7 +273,7 @@ export default function StocksPage() {
                           {r.changePercent != null ? (
                             <span
                               className={
-                                r.changePercent < 0 ? "text-red-600" : "text-emerald-600"
+                                r.changePercent < 0 ? "text-rose-600" : "text-emerald-600"
                               }
                             >
                               {r.changePercent >= 0 ? "+" : ""}
@@ -266,7 +292,7 @@ export default function StocksPage() {
                             size="icon"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDelete(r.id);
+                              handleDelete(r);
                             }}
                           >
                             <Trash2 className="h-4 w-4 text-muted-foreground" />

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { formatSEK } from "@/lib/currency";
 import { categoryColor, categoryHex } from "@/lib/categories";
+import { AccentCard } from "@/components/accent-card";
 
 interface Transaction {
   id: string;
@@ -12,26 +13,6 @@ interface Transaction {
   category: string;
   description: string | null;
   date: string;
-}
-
-interface AccentCardProps {
-  label: string;
-  value: string;
-  subtitle: React.ReactNode;
-  accent: string; // left border colour
-  valueClass?: string;
-}
-
-function AccentCard({ label, value, subtitle, accent, valueClass }: AccentCardProps) {
-  return (
-    <div className={`rounded-lg border-l-4 ${accent} bg-white p-4 shadow-sm`}>
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-        {label}
-      </div>
-      <div className={`mt-1 text-2xl font-bold ${valueClass ?? "text-slate-800"}`}>{value}</div>
-      <div className="mt-1 text-xs text-slate-400">{subtitle}</div>
-    </div>
-  );
 }
 
 // The pay period runs from the cut-off day of one month to the day before the
@@ -196,8 +177,9 @@ function ExpensesPie({ slices, total }: { slices: Slice[]; total: number }) {
 
 export default function DashboardPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [stockTotal, setStockTotal] = useState(0);
-  const [savingsTotal, setSavingsTotal] = useState(0);
+  // null = still loading, so cards can show a placeholder instead of fake zeros.
+  const [stockTotal, setStockTotal] = useState<number | null>(null);
+  const [savingsTotal, setSavingsTotal] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [cutoffDay, setCutoffDay] = useState(DEFAULT_CUTOFF_DAY);
   // null = "current period"; explicit key once the user picks one.
@@ -245,12 +227,12 @@ export default function DashboardPage() {
     fetch("/api/stocks")
       .then((r) => r.json())
       .then((d) => setStockTotal(d.total ?? 0))
-      .catch(() => {});
+      .catch(() => setStockTotal(0));
 
     fetch("/api/savings")
       .then((r) => r.json())
       .then((d) => setSavingsTotal(d.account ? d.total ?? 0 : 0))
-      .catch(() => {});
+      .catch(() => setSavingsTotal(0));
   }, []);
 
   const currentPeriod = periodKey(new Date(), cutoffDay);
@@ -291,10 +273,13 @@ export default function DashboardPage() {
     return { pieSlices: slices, pieTotal: slices.reduce((s, x) => s + x.value, 0) };
   }, [transactions, activePeriod, cutoffDay]);
 
-  const totalBalance = stockTotal + savingsTotal;
+  const wealthLoading = stockTotal === null || savingsTotal === null;
+  const totalBalance = (stockTotal ?? 0) + (savingsTotal ?? 0);
   const cashflow = income - expenses;
   const monthLabel = periodLabel(currentPeriod, cutoffDay);
   const maxBar = Math.max(income, expenses, 1);
+  // "…" while loading so the cards never flash misleading zeros.
+  const money = (v: number, pending: boolean) => (pending ? "…" : formatSEK(v));
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -320,28 +305,28 @@ export default function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <AccentCard
           label="Total Wealth"
-          value={formatSEK(totalBalance)}
+          value={money(totalBalance, wealthLoading)}
           subtitle="Stocks + savings"
           accent="border-emerald-500"
           valueClass="text-emerald-600"
         />
         <AccentCard
           label="Monthly Income"
-          value={formatSEK(income)}
+          value={money(income, !loaded)}
           subtitle={monthLabel}
           accent="border-blue-500"
           valueClass="text-blue-600"
         />
         <AccentCard
           label="Monthly Expenses"
-          value={formatSEK(expenses)}
+          value={money(expenses, !loaded)}
           subtitle={monthLabel}
           accent="border-rose-500"
           valueClass="text-rose-600"
         />
         <AccentCard
           label="Net Cashflow"
-          value={formatSEK(cashflow)}
+          value={money(cashflow, !loaded)}
           subtitle="Income − expenses"
           accent="border-amber-500"
           valueClass={cashflow < 0 ? "text-rose-600" : "text-amber-600"}

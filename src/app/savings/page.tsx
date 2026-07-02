@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { formatSEK } from "@/lib/currency";
+import { AccentCard } from "@/components/accent-card";
 
 interface SavingsAccount {
   id: string;
@@ -55,11 +56,16 @@ export default function SavingsPage() {
   const [txType, setTxType] = useState<"DEPOSIT" | "WITHDRAWAL">("DEPOSIT");
   const [amount, setAmount] = useState("");
   const [saving, setSaving] = useState(false);
+  const amountRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     setLoading(true);
-    const res = await fetch("/api/savings");
-    setData(await res.json());
+    try {
+      const res = await fetch("/api/savings");
+      setData(await res.json());
+    } catch {
+      toast.error("Could not load savings account");
+    }
     setLoading(false);
   }
 
@@ -136,24 +142,32 @@ export default function SavingsPage() {
               Enter the balance as of today. Interest accrues daily from now on.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="balance">Principal balance (SEK)</Label>
-              <Input
-                id="balance" type="number" min="0" step="0.01" value={openingBalance}
-                onChange={(e) => setOpeningBalance(e.target.value)} placeholder="50000"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="interest">Accrued interest to date (SEK, optional)</Label>
-              <Input
-                id="interest" type="number" min="0" step="0.01" value={openingInterest}
-                onChange={(e) => setOpeningInterest(e.target.value)} placeholder="0"
-              />
-            </div>
-            <Button onClick={handleSetup} disabled={settingUp}>
-              {settingUp ? "Creating…" : "Create account"}
-            </Button>
+          <CardContent>
+            <form
+              className="grid gap-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSetup();
+              }}
+            >
+              <div className="grid gap-2">
+                <Label htmlFor="balance">Principal balance (SEK)</Label>
+                <Input
+                  id="balance" type="number" min="0" step="0.01" inputMode="decimal" value={openingBalance}
+                  onChange={(e) => setOpeningBalance(e.target.value)} placeholder="50000"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="interest">Accrued interest to date (SEK, optional)</Label>
+                <Input
+                  id="interest" type="number" min="0" step="0.01" inputMode="decimal" value={openingInterest}
+                  onChange={(e) => setOpeningInterest(e.target.value)} placeholder="0"
+                />
+              </div>
+              <Button type="submit" disabled={settingUp}>
+                {settingUp ? "Creating…" : "Create account"}
+              </Button>
+            </form>
           </CardContent>
         </Card>
       </div>
@@ -178,11 +192,22 @@ export default function SavingsPage() {
               <Plus className="mr-1 h-4 w-4" /> Deposit / Withdraw
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent
+            onOpenAutoFocus={(e) => {
+              e.preventDefault();
+              amountRef.current?.focus();
+            }}
+          >
             <DialogHeader>
               <DialogTitle>Move money</DialogTitle>
               <DialogDescription>Record a deposit or withdrawal.</DialogDescription>
             </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleTx();
+              }}
+            >
             <div className="grid gap-4 py-2">
               <div className="grid gap-2">
                 <Label>Type</Label>
@@ -197,52 +222,51 @@ export default function SavingsPage() {
               <div className="grid gap-2">
                 <Label htmlFor="tx-amount">Amount (SEK)</Label>
                 <Input
-                  id="tx-amount" type="number" min="0" step="0.01" value={amount}
+                  ref={amountRef}
+                  id="tx-amount" type="number" min="0" step="0.01" inputMode="decimal" value={amount}
                   onChange={(e) => setAmount(e.target.value)} placeholder="0.00"
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={handleTx} disabled={saving}>
+              <Button type="submit" disabled={saving}>
                 {saving ? "Saving…" : "Save"}
               </Button>
             </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total value</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatSEK(total)}</div>
-            <Badge variant="secondary" className="mt-2">
-              {(annualRate * 100).toFixed(2).replace(".", ",")}% rate
-            </Badge>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Principal</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatSEK(account.principalBalance)}</div>
-            <CardDescription className="mt-1">Capitalised on Dec 31</CardDescription>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Accrued interest</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-emerald-600">
-              {formatSEK(account.accruedInterest)}
-            </div>
-            <CardDescription className="mt-1">Awaiting capitalisation</CardDescription>
-          </CardContent>
-        </Card>
+        <AccentCard
+          label="Total value"
+          value={formatSEK(total)}
+          subtitle={
+            <span className="inline-flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-700">
+                {(annualRate * 100).toFixed(2).replace(".", ",")}% annual rate
+              </span>
+              ≈ {formatSEK(total * annualRate)}/year
+            </span>
+          }
+          accent="border-emerald-500"
+          valueClass="text-emerald-600"
+        />
+        <AccentCard
+          label="Principal"
+          value={formatSEK(account.principalBalance)}
+          subtitle="Capitalised on Dec 31"
+          accent="border-blue-500"
+          valueClass="text-blue-600"
+        />
+        <AccentCard
+          label="Accrued interest"
+          value={formatSEK(account.accruedInterest)}
+          subtitle="Awaiting capitalisation"
+          accent="border-amber-500"
+          valueClass="text-amber-600"
+        />
       </div>
 
       <Card>
@@ -270,7 +294,14 @@ export default function SavingsPage() {
                   <TableRow key={h.id}>
                     <TableCell>{new Date(h.date).toLocaleDateString("sv-SE")}</TableCell>
                     <TableCell>
-                      <Badge variant={h.type === "DEPOSIT" ? "default" : "secondary"}>
+                      <Badge
+                        variant="outline"
+                        className={
+                          h.type === "DEPOSIT"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-rose-200 bg-rose-50 text-rose-700"
+                        }
+                      >
                         {h.type === "DEPOSIT" ? "Deposit" : "Withdrawal"}
                       </Badge>
                     </TableCell>
@@ -278,7 +309,7 @@ export default function SavingsPage() {
                       className={
                         h.type === "DEPOSIT"
                           ? "text-right font-medium text-emerald-600"
-                          : "text-right font-medium text-red-600"
+                          : "text-right font-medium text-rose-600"
                       }
                     >
                       {h.type === "DEPOSIT" ? "+" : "−"}
