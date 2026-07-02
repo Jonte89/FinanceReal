@@ -31,7 +31,7 @@ Pages live in `src/app/<domain>/page.tsx`; their APIs in `src/app/api/<domain>/r
 - Prisma 7 **requires a driver adapter**. The shared client (`src/lib/prisma.ts`) wraps `@prisma/adapter-libsql` and is the singleton you should import everywhere (`import { prisma } from "@/lib/prisma"`). The same libSQL adapter drives both a **local SQLite file** in dev (`DATABASE_URL="file:./dev.db"`) and a **remote Turso database** in prod (`DATABASE_URL="libsql://…"` + `TURSO_AUTH_TOKEN`) — see `DEPLOY.md`.
 - The generated client is emitted to `src/generated/prisma` (not `node_modules`) per `prisma/schema.prisma`'s `output`. Import types/client from `@/generated/prisma/client`.
 - `datasource db` in the schema only declares `provider = "sqlite"` (no `url`); the connection is supplied at runtime by the adapter. `DATABASE_URL` (in `.env`) is loaded for the CLI via `prisma.config.ts` (`import "dotenv/config"`), **not** automatically by Prisma.
-- Models: `Transaction`, `StockHolding`, `SavingsAccount`, `SavingsTransaction`. Money is stored as `Float` in SEK; `type` fields are plain strings (`"INCOME"`/`"EXPENSE"`, `"DEPOSIT"`/`"WITHDRAWAL"`), not enums.
+- Models: `Transaction`, `StockHolding`, `SavingsAccount`, `SavingsTransaction`, plus `AppSetting` — a singleton row (id `"main"`) for app-wide preferences (e.g. `cutoffDay`, the day a new budget period starts, managed via `/api/settings`). Money is stored as `Float` in SEK; `type` fields are plain strings (`"INCOME"`/`"EXPENSE"`, `"DEPOSIT"`/`"WITHDRAWAL"`), not enums.
 
 ### Domain logic
 - **Stock pricing** (`src/app/api/stocks/route.ts`): `yahoo-finance2` v3 is **class-based** — instantiate `new YahooFinance(...)`. Non-SEK quotes are converted to SEK via a `<CCY>SEK=X` FX quote, cached per request.

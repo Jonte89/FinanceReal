@@ -37,6 +37,13 @@ model SavingsAccount {
   updatedAt          DateTime @updatedAt
 }
 
+// Singleton row (id "main") holding app-wide preferences.
+model AppSetting {
+  id        String   @id @default("main")
+  cutoffDay Int      @default(25) // Day of month a new budget period starts (1-28)
+  updatedAt DateTime @updatedAt
+}
+
 model SavingsTransaction {
   id        String   @id @default(cuid())
   date      DateTime

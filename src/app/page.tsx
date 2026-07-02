@@ -36,8 +36,10 @@ function AccentCard({ label, value, subtitle, accent, valueClass }: AccentCardPr
 
 // The pay period runs from the cut-off day of one month to the day before the
 // cut-off of the next (e.g. cut-off 25 → "25 Jun – 24 Jul"). Cut-off 1 is a
-// plain calendar month. Stored in localStorage under this key.
-const CUTOFF_STORAGE_KEY = "periodCutoffDay";
+// plain calendar month. Stored in the AppSetting DB row via /api/settings so
+// it syncs across devices. (LEGACY_CUTOFF_KEY is the old localStorage slot,
+// migrated to the DB on first load.)
+const LEGACY_CUTOFF_KEY = "periodCutoffDay";
 const DEFAULT_CUTOFF_DAY = 25;
 
 function daysInMonth(year: number, month: number): number {
@@ -201,16 +203,36 @@ export default function DashboardPage() {
   // null = "current period"; explicit key once the user picks one.
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
 
-  // Load the saved cut-off day (client-only to avoid hydration mismatch).
+  // Load the saved cut-off day. If the DB has no row yet but this browser has
+  // a value from the old localStorage-based version, push that to the DB once.
   useEffect(() => {
-    const stored = Number(localStorage.getItem(CUTOFF_STORAGE_KEY));
-    if (Number.isInteger(stored) && stored >= 1 && stored <= 28) setCutoffDay(stored);
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((s: { cutoffDay: number; persisted: boolean }) => {
+        const legacy = Number(localStorage.getItem(LEGACY_CUTOFF_KEY));
+        if (!s.persisted && Number.isInteger(legacy) && legacy >= 1 && legacy <= 28) {
+          setCutoffDay(legacy);
+          fetch("/api/settings", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cutoffDay: legacy }),
+          }).catch(() => {});
+        } else if (Number.isInteger(s.cutoffDay)) {
+          setCutoffDay(s.cutoffDay);
+        }
+        localStorage.removeItem(LEGACY_CUTOFF_KEY);
+      })
+      .catch(() => {});
   }, []);
 
   function updateCutoffDay(day: number) {
     setCutoffDay(day);
     setSelectedPeriod(null); // period boundaries moved; snap back to "now"
-    localStorage.setItem(CUTOFF_STORAGE_KEY, String(day));
+    fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cutoffDay: day }),
+    }).catch(() => {});
   }
 
   useEffect(() => {
