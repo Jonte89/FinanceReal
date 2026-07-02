@@ -34,14 +34,45 @@ function AccentCard({ label, value, subtitle, accent, valueClass }: AccentCardPr
   );
 }
 
-// "2026-06" key used to group/select a month.
-function monthKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+// The pay period runs from the cut-off day of one month to the day before the
+// cut-off of the next (e.g. cut-off 25 → "25 Jun – 24 Jul"). Cut-off 1 is a
+// plain calendar month. Stored in localStorage under this key.
+const CUTOFF_STORAGE_KEY = "periodCutoffDay";
+const DEFAULT_CUTOFF_DAY = 25;
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate();
 }
 
-function monthKeyLabel(key: string): string {
+// "2026-06" key for the period that *starts* in June 2026. The cut-off is
+// clamped to the month's length so e.g. day 28 still works in February.
+function periodKey(d: Date, cutoffDay: number): string {
+  let y = d.getFullYear();
+  let m = d.getMonth();
+  if (d.getDate() < Math.min(cutoffDay, daysInMonth(y, m))) {
+    m -= 1;
+    if (m < 0) {
+      m = 11;
+      y -= 1;
+    }
+  }
+  return `${y}-${String(m + 1).padStart(2, "0")}`;
+}
+
+function periodLabel(key: string, cutoffDay: number): string {
   const [y, m] = key.split("-").map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  if (cutoffDay === 1) {
+    return new Date(y, m - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  }
+  const start = new Date(y, m - 1, Math.min(cutoffDay, daysInMonth(y, m - 1)));
+  const end = new Date(y, m, Math.min(cutoffDay, daysInMonth(y, m)) - 1);
+  const short = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return `${short(start)} – ${short(end)} ${end.getFullYear()}`;
+}
+
+function ordinal(n: number): string {
+  const suffix = n % 10 === 1 ? "st" : n % 10 === 2 ? "nd" : n % 10 === 3 ? "rd" : "th";
+  return `${n}${n >= 11 && n <= 13 ? "th" : suffix}`;
 }
 
 function polar(cx: number, cy: number, r: number, angleDeg: number) {
@@ -74,7 +105,7 @@ function ExpensesPie({ slices, total }: { slices: Slice[]; total: number }) {
       <div className="flex h-[320px] w-[320px] items-center justify-center rounded-full bg-slate-50 text-center text-xs text-slate-400">
         No expenses
         <br />
-        this month
+        this period
       </div>
     );
   }
@@ -163,33 +194,29 @@ function ExpensesPie({ slices, total }: { slices: Slice[]; total: number }) {
 
 export default function DashboardPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [income, setIncome] = useState(0);
-  const [expenses, setExpenses] = useState(0);
   const [stockTotal, setStockTotal] = useState(0);
   const [savingsTotal, setSavingsTotal] = useState(0);
   const [loaded, setLoaded] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(() => monthKey(new Date()));
+  const [cutoffDay, setCutoffDay] = useState(DEFAULT_CUTOFF_DAY);
+  // null = "current period"; explicit key once the user picks one.
+  const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
+
+  // Load the saved cut-off day (client-only to avoid hydration mismatch).
+  useEffect(() => {
+    const stored = Number(localStorage.getItem(CUTOFF_STORAGE_KEY));
+    if (Number.isInteger(stored) && stored >= 1 && stored <= 28) setCutoffDay(stored);
+  }, []);
+
+  function updateCutoffDay(day: number) {
+    setCutoffDay(day);
+    setSelectedPeriod(null); // period boundaries moved; snap back to "now"
+    localStorage.setItem(CUTOFF_STORAGE_KEY, String(day));
+  }
 
   useEffect(() => {
     fetch("/api/transactions")
       .then((r) => r.json())
-      .then((txs: Transaction[]) => {
-        setTransactions(txs);
-        const now = new Date();
-        const m = now.getMonth();
-        const y = now.getFullYear();
-        let inc = 0;
-        let exp = 0;
-        for (const t of txs) {
-          const d = new Date(t.date);
-          if (d.getMonth() === m && d.getFullYear() === y) {
-            if (t.type === "INCOME") inc += t.amount;
-            else exp += t.amount;
-          }
-        }
-        setIncome(inc);
-        setExpenses(exp);
-      })
+      .then((txs: Transaction[]) => setTransactions(txs))
       .catch(() => {})
       .finally(() => setLoaded(true));
 
@@ -204,36 +231,68 @@ export default function DashboardPage() {
       .catch(() => {});
   }, []);
 
-  // Months that have any transactions, newest first, with the current month
-  // always present so the picker is never empty.
-  const monthOptions = useMemo(() => {
-    const keys = new Set<string>([monthKey(new Date())]);
-    for (const t of transactions) keys.add(monthKey(new Date(t.date)));
-    return Array.from(keys).sort().reverse();
-  }, [transactions]);
+  const currentPeriod = periodKey(new Date(), cutoffDay);
 
-  // Expenses for the selected month, grouped by category and sorted desc.
+  // Income/expenses for the current pay period (summary cards).
+  const { income, expenses } = useMemo(() => {
+    let inc = 0;
+    let exp = 0;
+    for (const t of transactions) {
+      if (periodKey(new Date(t.date), cutoffDay) !== currentPeriod) continue;
+      if (t.type === "INCOME") inc += t.amount;
+      else exp += t.amount;
+    }
+    return { income: inc, expenses: exp };
+  }, [transactions, cutoffDay, currentPeriod]);
+
+  // Periods that have any transactions, newest first, with the current period
+  // always present so the picker is never empty.
+  const periodOptions = useMemo(() => {
+    const keys = new Set<string>([currentPeriod]);
+    for (const t of transactions) keys.add(periodKey(new Date(t.date), cutoffDay));
+    return Array.from(keys).sort().reverse();
+  }, [transactions, cutoffDay, currentPeriod]);
+
+  const activePeriod = selectedPeriod ?? currentPeriod;
+
+  // Expenses for the selected period, grouped by category and sorted desc.
   const { pieSlices, pieTotal } = useMemo(() => {
     const byCategory = new Map<string, number>();
     for (const t of transactions) {
       if (t.type !== "EXPENSE") continue;
-      if (monthKey(new Date(t.date)) !== selectedMonth) continue;
+      if (periodKey(new Date(t.date), cutoffDay) !== activePeriod) continue;
       byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + t.amount);
     }
     const slices = Array.from(byCategory, ([category, value]) => ({ category, value })).sort(
       (a, b) => b.value - a.value
     );
     return { pieSlices: slices, pieTotal: slices.reduce((s, x) => s + x.value, 0) };
-  }, [transactions, selectedMonth]);
+  }, [transactions, activePeriod, cutoffDay]);
 
   const totalBalance = stockTotal + savingsTotal;
   const cashflow = income - expenses;
-  const monthLabel = new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  const monthLabel = periodLabel(currentPeriod, cutoffDay);
   const maxBar = Math.max(income, expenses, 1);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Dashboard</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Dashboard</h1>
+        <label className="flex items-center gap-2 text-xs text-slate-500">
+          Month starts on
+          <select
+            value={cutoffDay}
+            onChange={(e) => updateCutoffDay(Number(e.target.value))}
+            className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          >
+            {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+              <option key={d} value={d}>
+                the {ordinal(d)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -272,13 +331,13 @@ export default function DashboardPage() {
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-800">Expenses by Category</h2>
           <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
+            value={activePeriod}
+            onChange={(e) => setSelectedPeriod(e.target.value)}
             className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
           >
-            {monthOptions.map((key) => (
+            {periodOptions.map((key) => (
               <option key={key} value={key}>
-                {monthKeyLabel(key)}
+                {periodLabel(key, cutoffDay)}
               </option>
             ))}
           </select>
@@ -287,7 +346,7 @@ export default function DashboardPage() {
           <ExpensesPie slices={pieSlices} total={pieTotal} />
           <div className="w-full space-y-2 sm:w-80">
             {pieTotal <= 0 ? (
-              <p className="text-sm text-slate-400">No expenses recorded for this month.</p>
+              <p className="text-sm text-slate-400">No expenses recorded for this period.</p>
             ) : (
               <>
                 {pieSlices.map((s) => (

@@ -25,12 +25,12 @@ Personal Finance & Wealth Tracker: a Next.js App Router app (React 19) tracking 
 - **Stocks** (`/stocks`) — holdings priced live through `yahoo-finance2`.
 - **Savings** (`/savings`) — single interest-bearing account with daily accrual.
 
-Pages live in `src/app/<domain>/page.tsx`; their APIs in `src/app/api/<domain>/route.ts` (plus `[id]` routes for mutations). The `Sidebar` (`src/components/sidebar.tsx`) and a `sonner` `Toaster` are mounted globally in `layout.tsx`.
+Pages live in `src/app/<domain>/page.tsx`; their APIs in `src/app/api/<domain>/route.ts` (plus `[id]` routes for mutations). The desktop `Sidebar` and phone `MobileNav` (both exported from `src/components/sidebar.tsx`) plus a `sonner` `Toaster` are mounted globally in `layout.tsx`.
 
-### Data layer (Prisma 7 + SQLite)
-- Prisma 7 **requires a driver adapter**. The shared client (`src/lib/prisma.ts`) wraps `@prisma/adapter-better-sqlite3` and is the singleton you should import everywhere (`import { prisma } from "@/lib/prisma"`).
+### Data layer (Prisma 7 + libSQL)
+- Prisma 7 **requires a driver adapter**. The shared client (`src/lib/prisma.ts`) wraps `@prisma/adapter-libsql` and is the singleton you should import everywhere (`import { prisma } from "@/lib/prisma"`). The same libSQL adapter drives both a **local SQLite file** in dev (`DATABASE_URL="file:./dev.db"`) and a **remote Turso database** in prod (`DATABASE_URL="libsql://…"` + `TURSO_AUTH_TOKEN`) — see `DEPLOY.md`.
 - The generated client is emitted to `src/generated/prisma` (not `node_modules`) per `prisma/schema.prisma`'s `output`. Import types/client from `@/generated/prisma/client`.
-- `DATABASE_URL` (in `.env`, e.g. `file:./dev.db`) is loaded for the CLI via `prisma.config.ts` (`import "dotenv/config"`), **not** automatically by Prisma.
+- `datasource db` in the schema only declares `provider = "sqlite"` (no `url`); the connection is supplied at runtime by the adapter. `DATABASE_URL` (in `.env`) is loaded for the CLI via `prisma.config.ts` (`import "dotenv/config"`), **not** automatically by Prisma.
 - Models: `Transaction`, `StockHolding`, `SavingsAccount`, `SavingsTransaction`. Money is stored as `Float` in SEK; `type` fields are plain strings (`"INCOME"`/`"EXPENSE"`, `"DEPOSIT"`/`"WITHDRAWAL"`), not enums.
 
 ### Domain logic
@@ -43,3 +43,7 @@ Pages live in `src/app/<domain>/page.tsx`; their APIs in `src/app/api/<domain>/r
 ### UI
 - shadcn/ui components in `src/components/ui` (style `radix-nova`, base color `neutral`, Lucide icons; config in `components.json`), built on Radix/Base UI + Tailwind v4 (CSS-first via `src/app/globals.css`, no `tailwind.config`).
 - Path alias `@/*` → `src/*` (see `tsconfig.json`). Aliases: `@/components`, `@/lib`, `@/components/ui`.
+
+### Auth & deployment
+- `src/middleware.ts` guards **every** route (except Next.js internals/favicon) with HTTP Basic Auth when `APP_PASSWORD` is set (user defaults to `APP_USER` or `"admin"`). If `APP_PASSWORD` is unset — e.g. local dev — the app is left open.
+- Deployment (Vercel + Turso, env vars, data migration) is documented in `DEPLOY.md`.
