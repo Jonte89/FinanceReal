@@ -95,13 +95,14 @@ function ExpensesPie({ slices, total }: { slices: Slice[]; total: number }) {
 
   // Geometry for each slice. A single category is rendered as a full circle
   // since an arc from 0–360° is degenerate.
+  const arcs: (Slice & { start: number; end: number; mid: number })[] = [];
   let cumulative = 0;
-  const arcs = slices.map((s) => {
+  for (const s of slices) {
     const start = (cumulative / total) * 360;
     cumulative += s.value;
     const end = (cumulative / total) * 360;
-    return { ...s, start, end, mid: (start + end) / 2 };
-  });
+    arcs.push({ ...s, start, end, mid: (start + end) / 2 });
+  }
 
   function sliceStyle(category: string, mid: number): React.CSSProperties {
     const isHover = hovered === category;

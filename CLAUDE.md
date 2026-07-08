@@ -18,7 +18,7 @@ There is no test runner configured.
 
 ## Architecture
 
-Personal Finance & Wealth Tracker: a Next.js App Router app (React 19) tracking **transactions, stock holdings, and a savings account, all valued in SEK**.
+Personal Finance & Wealth Tracker: a Next.js App Router app (React 19) tracking **transactions, stock holdings, and a savings account, all valued in SEK**. The app is **multi-user**: every data model belongs to a `User`, and all queries must be scoped by the session's `userId`.
 
 **Three domains, each a page + API route + Prisma model:**
 - **Transactions** (`/transactions`) — income/expense ledger, categorized via `src/lib/categories.ts`.
@@ -31,7 +31,8 @@ Pages live in `src/app/<domain>/page.tsx`; their APIs in `src/app/api/<domain>/r
 - Prisma 7 **requires a driver adapter**. The shared client (`src/lib/prisma.ts`) wraps `@prisma/adapter-libsql` and is the singleton you should import everywhere (`import { prisma } from "@/lib/prisma"`). The same libSQL adapter drives both a **local SQLite file** in dev (`DATABASE_URL="file:./dev.db"`) and a **remote Turso database** in prod (`DATABASE_URL="libsql://…"` + `TURSO_AUTH_TOKEN`) — see `DEPLOY.md`.
 - The generated client is emitted to `src/generated/prisma` (not `node_modules`) per `prisma/schema.prisma`'s `output`. Import types/client from `@/generated/prisma/client`.
 - `datasource db` in the schema only declares `provider = "sqlite"` (no `url`); the connection is supplied at runtime by the adapter. `DATABASE_URL` (in `.env`) is loaded for the CLI via `prisma.config.ts` (`import "dotenv/config"`), **not** automatically by Prisma.
-- Models: `Transaction`, `StockHolding`, `SavingsAccount`, `SavingsTransaction`, plus `AppSetting` — a singleton row (id `"main"`) for app-wide preferences (e.g. `cutoffDay`, the day a new budget period starts, managed via `/api/settings`). Money is stored as `Float` in SEK; `type` fields are plain strings (`"INCOME"`/`"EXPENSE"`, `"DEPOSIT"`/`"WITHDRAWAL"`), not enums.
+- Models: `User`, `Transaction`, `StockHolding`, `SavingsAccount`, `SavingsTransaction`, plus `AppSetting` — per-user preferences (e.g. `cutoffDay`, the day a new budget period starts, managed via `/api/settings`). Every data model has a required `userId` (cascade-delete); `SavingsAccount` and `AppSetting` are one-per-user (`userId @unique`). Money is stored as `Float` in SEK; `type` fields are plain strings (`"INCOME"`/`"EXPENSE"`, `"DEPOSIT"`/`"WITHDRAWAL"`), not enums.
+- The `multi_user` migration parks pre-existing rows on a placeholder user (id `legacy`, unclaimable); `scripts/claim-legacy.mjs <email>` reassigns them to a real account.
 
 ### Domain logic
 - **Stock pricing** (`src/app/api/stocks/route.ts`): `yahoo-finance2` v3 is **class-based** — instantiate `new YahooFinance(...)`. Non-SEK quotes are converted to SEK via a `<CCY>SEK=X` FX quote, cached per request.
@@ -45,5 +46,7 @@ Pages live in `src/app/<domain>/page.tsx`; their APIs in `src/app/api/<domain>/r
 - Path alias `@/*` → `src/*` (see `tsconfig.json`). Aliases: `@/components`, `@/lib`, `@/components/ui`.
 
 ### Auth & deployment
-- `src/middleware.ts` guards **every** route (except Next.js internals/favicon) with HTTP Basic Auth when `APP_PASSWORD` is set (user defaults to `APP_USER` or `"admin"`). If `APP_PASSWORD` is unset — e.g. local dev — the app is left open.
+- Email + password accounts with stateless sessions: `src/lib/session.ts` (edge-safe jose JWT sign/verify) and `src/lib/auth.ts` (bcryptjs hashing, `cookies()` helpers, `getSessionUserId()`). Auth endpoints live under `src/app/api/auth/` (signup/login/logout/me); the UI is `/login`.
+- `src/proxy.ts` (Next 16's renamed middleware) does an **optimistic** session-cookie check on every route: unauthenticated pages redirect to `/login`, APIs get 401. It is not the real guard — **every API route must call `getSessionUserId()` and scope its Prisma queries by `userId`** (use `deleteMany({ where: { id, userId } })` for mutations so ownership is enforced).
+- Signup is invite-only: `INVITE_CODE` must match in production (unset in prod disables signup; unset in dev leaves signup open). `SESSION_SECRET` signs session cookies (30-day expiry); a dev fallback is used when unset outside production.
 - Deployment (Vercel + Turso, env vars, data migration) is documented in `DEPLOY.md`.

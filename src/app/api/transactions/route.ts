@@ -1,14 +1,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getSessionUserId } from "@/lib/auth";
 
 export async function GET() {
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
   const transactions = await prisma.transaction.findMany({
+    where: { userId },
     orderBy: { date: "desc" },
   });
   return NextResponse.json(transactions);
 }
 
 export async function POST(request: Request) {
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
   const body = await request.json();
   const { date, type, amount, category, description } = body ?? {};
 
@@ -34,6 +42,7 @@ export async function POST(request: Request) {
       amount: parsedAmount,
       category,
       description: description || null,
+      userId,
     },
   });
 

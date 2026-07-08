@@ -3,8 +3,8 @@
 The app runs on **Vercel** and stores data in **Turso** (a hosted, SQLite-compatible
 database). Locally it still uses the `dev.db` SQLite file — no change to your workflow.
 
-Password protection is built in: set `APP_PASSWORD` and the whole site (pages + API)
-requires Basic Auth login. Your browser/phone remembers it after the first prompt.
+The app has account-based auth: each user signs up with email + password (gated by an
+invite code you choose) and only sees their own data.
 
 You only need to do this once. Steps that require *your* accounts are marked 🔑.
 
@@ -54,27 +54,42 @@ same way.)
    `postinstall` hook, so no extra config is needed.)
 2. Before the first deploy, add **Environment Variables** (Production):
 
-   | Name               | Value                                            |
-   | ------------------ | ------------------------------------------------ |
-   | `DATABASE_URL`     | the `libsql://…` URL from step 2                 |
-   | `TURSO_AUTH_TOKEN` | the token from step 2                            |
-   | `APP_PASSWORD`     | a strong password you choose                     |
-   | `APP_USER`         | *(optional)* login username, defaults to `admin` |
+   | Name               | Value                                                       |
+   | ------------------ | ----------------------------------------------------------- |
+   | `DATABASE_URL`     | the `libsql://…` URL from step 2                            |
+   | `TURSO_AUTH_TOKEN` | the token from step 2                                       |
+   | `SESSION_SECRET`   | output of `openssl rand -base64 32` (signs session cookies) |
+   | `INVITE_CODE`      | a code you choose; required to create an account            |
 
 3. Click **Deploy**.
 
-## 5. Open it on your phone
+## 5. Create your account & claim existing data
 
-Visit the `*.vercel.app` URL Vercel gives you. You'll get a login prompt — enter
-`admin` (or your `APP_USER`) and your `APP_PASSWORD`. On iOS/Android you can then use
-the browser's **Add to Home Screen** to get an app-like icon.
+1. Visit the `*.vercel.app` URL, choose **Create an account**, and sign up with your
+   email, a password, and your `INVITE_CODE`.
+2. If the database already had data from the single-user era, it is parked on a
+   placeholder "legacy" user. Claim it for your new account (run locally, pointed at
+   production):
+
+   ```bash
+   DATABASE_URL="libsql://…" TURSO_AUTH_TOKEN="…" node scripts/claim-legacy.mjs you@example.com
+   ```
+
+On iOS/Android you can use the browser's **Add to Home Screen** to get an app-like icon.
+
+## 6. Inviting other people
+
+Send them the URL and the `INVITE_CODE` — they sign up and get their own empty tracker.
+To rotate the code, change `INVITE_CODE` in Vercel's project settings and redeploy;
+existing accounts keep working.
 
 ---
 
 ### Notes
 
-- **Local dev is unchanged**: with `APP_PASSWORD` unset and `DATABASE_URL="file:./dev.db"`,
-  the app is open and uses the local SQLite file.
+- **Local dev**: `DATABASE_URL="file:./dev.db"` uses the local SQLite file. `SESSION_SECRET`
+  falls back to an insecure dev value if unset, and without `INVITE_CODE` signup is open
+  (both are enforced in production).
 - Your local `dev.db` data is **not** copied to Turso — production starts empty. Re-enter
   holdings/transactions there, or export/import manually if you need the old data.
-- To change the password later, edit `APP_PASSWORD` in Vercel's project settings and redeploy.
+- Rotating `SESSION_SECRET` logs everyone out (sessions are signed cookies, 30-day expiry).

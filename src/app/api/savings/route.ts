@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getSessionUserId } from "@/lib/auth";
 import { accrueSavings, annualRateFor } from "@/lib/savings";
 
 export async function GET() {
-  const account = await prisma.savingsAccount.findFirst();
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
+  const account = await prisma.savingsAccount.findUnique({ where: { userId } });
   if (!account) {
     return NextResponse.json({ account: null });
   }
@@ -24,7 +28,10 @@ export async function GET() {
     },
   });
 
-  const history = await prisma.savingsTransaction.findMany({ orderBy: { date: "desc" } });
+  const history = await prisma.savingsTransaction.findMany({
+    where: { userId },
+    orderBy: { date: "desc" },
+  });
   const total = saved.principalBalance + saved.accruedInterest;
 
   return NextResponse.json({
@@ -36,7 +43,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const existing = await prisma.savingsAccount.findFirst();
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
+  const existing = await prisma.savingsAccount.findUnique({ where: { userId } });
   if (existing) {
     return NextResponse.json({ error: "Account already exists" }, { status: 409 });
   }
@@ -57,6 +67,7 @@ export async function POST(request: Request) {
       principalBalance,
       accruedInterest,
       lastCalculatedDate: new Date(),
+      userId,
     },
   });
 

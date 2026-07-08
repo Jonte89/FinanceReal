@@ -58,8 +58,9 @@ export default function SavingsPage() {
   const [saving, setSaving] = useState(false);
   const amountRef = useRef<HTMLInputElement>(null);
 
+  // No synchronous setLoading(true): `loading` starts true, and refreshes
+  // after mutations keep showing the current data until the new data lands.
   async function load() {
-    setLoading(true);
     try {
       const res = await fetch("/api/savings");
       setData(await res.json());
@@ -70,7 +71,9 @@ export default function SavingsPage() {
   }
 
   useEffect(() => {
-    load();
+    // Deferred via .then so no setState runs synchronously inside the effect
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(load);
   }, []);
 
   async function handleSetup() {

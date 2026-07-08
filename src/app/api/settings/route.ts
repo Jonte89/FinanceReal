@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getSessionUserId } from "@/lib/auth";
 
 const DEFAULT_CUTOFF_DAY = 25;
 
-// App-wide settings live in a single AppSetting row (id "main").
+// Each user has (at most) one AppSetting row, keyed by userId.
 
 export async function GET() {
-  const setting = await prisma.appSetting.findUnique({ where: { id: "main" } });
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
+  const setting = await prisma.appSetting.findUnique({ where: { userId } });
   return NextResponse.json({
     cutoffDay: setting?.cutoffDay ?? DEFAULT_CUTOFF_DAY,
     persisted: setting !== null,
@@ -14,6 +18,9 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
   const body = await request.json();
   const cutoffDay = Number(body?.cutoffDay);
 
@@ -25,9 +32,9 @@ export async function PUT(request: Request) {
   }
 
   const setting = await prisma.appSetting.upsert({
-    where: { id: "main" },
+    where: { userId },
     update: { cutoffDay },
-    create: { id: "main", cutoffDay },
+    create: { cutoffDay, userId },
   });
 
   return NextResponse.json({ cutoffDay: setting.cutoffDay, persisted: true });

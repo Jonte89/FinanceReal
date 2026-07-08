@@ -10,6 +10,19 @@ datasource db {
   provider = "sqlite"
 }
 
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  transactions        Transaction[]
+  stockHoldings       StockHolding[]
+  savingsAccount      SavingsAccount?
+  savingsTransactions SavingsTransaction[]
+  setting             AppSetting?
+}
+
 model Transaction {
   id          String   @id @default(cuid())
   date        DateTime
@@ -18,6 +31,10 @@ model Transaction {
   category    String // Rent, Food, Subscriptions, Salary, Dividends, etc.
   description String?
   createdAt   DateTime @default(now())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model StockHolding {
@@ -26,8 +43,13 @@ model StockHolding {
   shares    Float
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
+// One interest-bearing account per user.
 model SavingsAccount {
   id                 String   @id @default(cuid())
   name               String   @default("Nordiska Flex Plus")
@@ -35,13 +57,17 @@ model SavingsAccount {
   accruedInterest    Float    @default(0) // Unpaid interest waiting to be capitalized
   lastCalculatedDate DateTime // Used to calculate daily interest gap
   updatedAt          DateTime @updatedAt
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// Singleton row (id "main") holding app-wide preferences.
+// One row of preferences per user.
 model AppSetting {
-  id        String   @id @default("main")
+  id        String   @id @default(cuid())
   cutoffDay Int      @default(25) // Day of month a new budget period starts (1-28)
   updatedAt DateTime @updatedAt
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model SavingsTransaction {
@@ -50,4 +76,8 @@ model SavingsTransaction {
   type      String // "DEPOSIT" or "WITHDRAWAL"
   amount    Float // Value in SEK
   createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

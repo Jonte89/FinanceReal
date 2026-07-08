@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import YahooFinance from "yahoo-finance2";
 import { prisma } from "@/lib/prisma";
+import { getSessionUserId } from "@/lib/auth";
 
 // yahoo-finance2 v3 is class-based and must be instantiated.
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
@@ -40,7 +41,13 @@ function getSekRate(currency: string, cache: Map<string, Promise<number | null>>
 }
 
 export async function GET() {
-  const holdings = await prisma.stockHolding.findMany({ orderBy: { createdAt: "asc" } });
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
+  const holdings = await prisma.stockHolding.findMany({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+  });
   const fxCache = new Map<string, Promise<number | null>>();
 
   const rows: StockRow[] = await Promise.all(
@@ -85,6 +92,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
   const body = await request.json();
   const ticker = typeof body?.ticker === "string" ? body.ticker.trim().toUpperCase() : "";
   const shares = Number(body?.shares);
@@ -96,6 +106,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "shares must be a positive number" }, { status: 400 });
   }
 
-  const holding = await prisma.stockHolding.create({ data: { ticker, shares } });
+  const holding = await prisma.stockHolding.create({ data: { ticker, shares, userId } });
   return NextResponse.json(holding, { status: 201 });
 }

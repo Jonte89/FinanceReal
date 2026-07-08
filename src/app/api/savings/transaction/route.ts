@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getSessionUserId } from "@/lib/auth";
 import { accrueSavings } from "@/lib/savings";
 
 export async function POST(request: Request) {
-  const account = await prisma.savingsAccount.findFirst();
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
+  const account = await prisma.savingsAccount.findUnique({ where: { userId } });
   if (!account) {
     return NextResponse.json({ error: "Set up the savings account first" }, { status: 400 });
   }
@@ -35,7 +39,7 @@ export async function POST(request: Request) {
 
   const [, updated] = await prisma.$transaction([
     prisma.savingsTransaction.create({
-      data: { date: new Date(), type, amount },
+      data: { date: new Date(), type, amount, userId },
     }),
     prisma.savingsAccount.update({
       where: { id: account.id },

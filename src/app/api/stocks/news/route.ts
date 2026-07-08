@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import YahooFinance from "yahoo-finance2";
+import { getSessionUserId } from "@/lib/auth";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
@@ -57,6 +58,12 @@ function fundKeywords(name: string): string[] {
 }
 
 export async function GET(request: Request) {
+  // No per-user data here, but require a session so anonymous traffic can't
+  // burn the Yahoo Finance quota.
+  if (!(await getSessionUserId())) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   const ticker = new URL(request.url).searchParams.get("ticker")?.trim();
   if (!ticker) {
     return NextResponse.json({ error: "ticker is required" }, { status: 400 });

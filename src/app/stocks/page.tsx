@@ -69,8 +69,9 @@ export default function StocksPage() {
     setNewsLoading((p) => ({ ...p, [row.ticker]: false }));
   }
 
+  // No synchronous setLoading(true): `loading` starts true, and refreshes
+  // after mutations keep showing the current data until the new data lands.
   async function load() {
-    setLoading(true);
     try {
       const res = await fetch("/api/stocks");
       const data = await res.json();
@@ -83,7 +84,9 @@ export default function StocksPage() {
   }
 
   useEffect(() => {
-    load();
+    // Deferred via .then so no setState runs synchronously inside the effect
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(load);
   }, []);
 
   async function handleAdd() {

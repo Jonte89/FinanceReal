@@ -49,8 +49,9 @@ export default function TransactionsPage() {
   const [filterType, setFilterType] = useState<"ALL" | "INCOME" | "EXPENSE">("ALL");
   const [filterCategory, setFilterCategory] = useState("ALL");
 
+  // No synchronous setLoading(true): `loading` starts true, and refreshes
+  // after mutations keep showing the current data until the new data lands.
   async function load() {
-    setLoading(true);
     try {
       const res = await fetch("/api/transactions");
       setTransactions(await res.json());
@@ -61,7 +62,9 @@ export default function TransactionsPage() {
   }
 
   useEffect(() => {
-    load();
+    // Deferred via .then so no setState runs synchronously inside the effect
+    // (react-hooks/set-state-in-effect).
+    Promise.resolve().then(load);
   }, []);
 
   async function handleAdd() {
